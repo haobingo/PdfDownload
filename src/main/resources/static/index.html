@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>用户信息</title>
+    <!-- 引入样式 -->
+    <link rel="stylesheet" href="element.css">
+</head>
+<body>
+<div id="app" style="width: 80%; margin: 0 auto">
+    <h2>pdf文件上传案例</h2>
+
+
+    <el-header style="background-color: #fff;height: 50px;margin-bottom: 10px;">
+        <el-select v-model="major" placeholder="请选择专业" @focus="focusOnSelect()">
+            <el-option v-for="item in options" :key="item" :label="item" :value="item">
+            </el-option>
+        </el-select>
+        <el-button icon="el-icon-search" style="margin: 10px" @click="getCurrentMajor()">确定</el-button>
+        <el-empty v-if="!ischoose" description="请先选择专业"></el-empty>
+        <el-button v-show="ischoose" icon="el-icon-plus" @click="add">添加</el-button>
+    </el-header>
+
+    <div v-show="!ischoose" style="color: rgb(151, 156, 159);margin-top:20%;font-size:25px;text-align: center;align-content: center">
+        请先选择专业
+    </div>
+
+    <div v-show="ischoose">
+        <div style="margin-left: 36%;font-size: 26px;font-family: fantasy;">
+            {{this.major}}培养方案管理
+        </div>
+
+        <el-table :data="tableData" style="margin-left: 2%">
+            <el-table-column label="专业名称" align="center" width="250px" prop="major">
+            </el-table-column>
+            <el-table-column label="版本" align="center" width="150px" prop="majorVersion">
+            </el-table-column>
+            <el-table-column label="有无上传" align="center" width="98px" prop="isLoad">
+                <template slot-scope="scope">
+                    <P style="color: red;" v-if="scope.row.isLoad===0">无</P>
+                    <p><a style="color: green;" v-if="scope.row.isLoad==1">有</a></p>
+                </template>
+            </el-table-column>
+
+            <el-table-column label="操作" align="center" width="500px">
+                <template slot-scope="scope">
+                    <div style="display: flex;flex-wrap: nowrap;">
+
+                        <el-button size="medium" icon="el-icon-reading" style="margin-left: 8px;width: 90px;"
+                                   type="primary"
+                                   @click="edit(scope.row)">编辑
+                        </el-button>
+
+                        <el-upload :action="uploadPath" :show-file-list="false" :file-list="fileList"
+                                   :data="uploadData" :on-success="handleSuccess" :before-upload="beforeUpload"
+                                   :on-error="handleError" :accept="'application/pdf'">
+                            <el-button size="medium" style="width: 90px;margin-left: 8px"
+                                       icon="el-icon-upload" slot="trigger" type="primary"
+                                       @click="uploadPDF(scope.row)">更新
+                            </el-button>
+                        </el-upload>
+
+
+                        <el-button size="medium" icon="el-icon-reading" style="margin-left: 8px;width: 90px;"
+                                   type="primary"
+                                   @click="showPDF(scope.row)">展示
+                        </el-button>
+
+
+                        <el-button size="medium" icon="el-icon-delete" style="margin-left: 8px;width: 90px;"
+                                   type="danger" @click="deletePDF(scope.row)">删除
+                        </el-button>
+
+
+                        <el-button size="medium" icon="el-icon-download" style="margin-left: 8px;width: 90px;"
+                                   type="success" @click="downloadPDF(scope.row)">下载
+                        </el-button>
+                    </div>
+
+                </template>
+            </el-table-column>
+        </el-table>
+
+        <el-dialog
+                title="文件信息"
+                :visible.sync="isShow"
+                width="38%">
+            <el-form ref="form" :model="form" label-width="120px">
+                <el-form-item label="专业名称">
+                    <el-input v-model="form.major"></el-input>
+                </el-form-item>
+                <el-form-item label="方案版本号">
+                    <el-input v-model="form.majorVersion" placeholder="如:2023"></el-input>
+                </el-form-item>
+            </el-form>
+            <span slot="footer" class="dialog-footer">
+            <el-button @click="isShow = false">取 消</el-button>
+            <el-button type="primary" @click="save">确 定</el-button>
+        </span>
+        </el-dialog>
+
+
+        <el-drawer title="培养方案展示" :visible.sync="isShowPDF" direction="btt" size="90%">
+            <embed v-if="pdfUrl" :src="pdfUrl" type="application/pdf" width="100%" height="100%"/>
+
+            <div v-if="!pdfUrl" style="text-align: center">
+                <p style="font-size: 38px">暂无数据</p>
+                <p style="font-size: 25px">请先上传培养方案</p>
+                <el-button icon="el-icon-error" type="danger" size="medium" @click="isShowPDF = !isShowPDF">返回
+                </el-button>
+            </div>
+        </el-drawer>
+
+    </div>
+
+    <script src="jquery.min.js"></script>
+    <script src="axios.min.js"></script>
+
+    <script type="module">
+        import axios from "axios.min";
+
+        console.log(axios())
+    </script>
+
+    <script src="vue.js"></script>
+    <!-- 引入组件库 -->
+    <script src="element.js"></script>
+
+    <script>
+
+        new Vue({
+            el: '#app',
+            data: {
+                options: {},
+                ischoose: false,
+                major: "",
+                isShowPDF: false,
+                pdfUrl: "",
+                form: {},
+                isShow: false,
+                fileSize: 10,
+                tableData: [],
+                uploadPath: "http://localhost:8080" + "/major/uploadPDF",
+                uploadData: {id: ""},
+                fileList: [],
+            },
+            created() {
+                this.update();
+            },
+            methods: {
+                update(){
+                    //获得下拉的专业列表
+                    $.get("/major/findMajors").then(res=>{
+                        this.options = res.data
+                    })
+                },
+                focusOnSelect() {
+                    this.major = "";
+                    this.ischoose = false;
+                },
+                getCurrentMajor() {
+                    this.ischoose = true;
+                    this.loadTable();
+                },
+                loadTable() {
+                    $.get("/major/findMajor/" + this.major).then(res => {
+                        this.tableData = res.data;
+                    });
+                    this.update()
+                },
+                handleSuccess(res) {
+                    // 处理上传成功的结果
+                    if (this.loading) this.loading.close();
+                    if (res.code === '520') {
+                        this.$message.error('上传失败')
+                        return
+                    } else {
+                        this.$message.success('上传成功')
+                    }
+                    this.loadTable()
+                    this.fileList = []
+                },
+                beforeUpload(file) {
+                    // 验证文件类型和大小
+                    const isPDF = file.type === "application/pdf";
+                    const isLtFileSize = file.size / 1024 / 1024 < this.fileSize;
+
+                    if (!isPDF) {
+                        this.$message.error("只能上传 PDF 文件");
+                    }
+                    if (!isLtFileSize) {
+                        this.$message.error("上传文件大小不能超过" + this.fileSize + "MB");
+                    }
+                    this.loading = this.$loading({
+                        lock: true,
+                        text: '上传中...',
+                        spinner: 'el-icon-loading',
+                        background: 'rgba(0, 0, 0, 0.7)'
+                    });
+                    return isPDF && isLtFileSize;
+                },
+                handleError() {
+                    console.log(error);
+                    if (this.loading) {
+                        this.loading.close();
+                    }
+                },
+                add() {
+                    this.isShow = true;
+                    this.form = {}/*清空表单记录*/
+                    if(this.major===''){
+
+                    }else{
+                        this.form.major = this.major;
+                    }
+                },
+                edit(item) {
+                    this.form = item;
+                    this.isShow = true;
+                },
+                save() {
+                    let data = JSON.stringify(this.form);
+                    if (this.form.id) {
+                        // 编辑
+                        $.ajax({
+                            url: '/major',
+                            type: 'put',
+                            contentType: 'application/json',
+                            data: data
+                        }).then(res => {
+                            this.isShow = false;
+                            this.loadTable();
+                        })
+                    } else {
+                        // 新增
+                        $.ajax({
+                            url: '/major',
+                            type: 'post',
+                            contentType: 'application/json',
+                            data: data
+                        }).then(res => {
+                            this.isShow = false;
+                            this.loadTable();
+                        })
+                    }
+                },
+                uploadPDF(item) {
+                    this.uploadData.id = item.id;
+                },
+                showPDF(item) {
+                    this.isShowPDF = true;
+                    this.pdfUrl = null;
+                    if(item.isLoad === 0){
+                        return
+                    }
+                    let url = "http://localhost:8080" + "/major/showPDF/" + item.major + "/" + item.majorVersion;
+                    /*                $.ajax({
+                                        url:url,
+                                        type:'get',
+                                        contentType:"arraybuffer"
+                                    }).then(res=>{
+                                        /!*if (!res.headers["content-type"].includes("application/pdf")) {
+                                            return;
+                                        }*!/
+                                        // 将响应数据转换为Blob对象
+                                        const blob = new Blob([res.data], { type: "application/pdf;charset=utf-8" });
+                                        // 生成URL，将其分配给嵌入元素的src属性
+                                        this.pdfUrl = URL.createObjectURL(blob);
+                                        console.log(this.pdfUrl)
+                                    });*/
+                    axios.get(url, {responseType: "blob"}).then(res => {
+                        if(!res.headers['content-type'].includes("application/pdf")){
+                            return;
+                        }
+                        const blob = new Blob([res.data], {type: "application/pdf;charset=utf-8"})
+                        this.pdfUrl = URL.createObjectURL(blob);
+                        console.log(this.pdfUrl)
+                        this.ischoose = true
+                    })
+                },
+                deletePDF(item) {
+                    $.ajax({
+                        url: '/major/' + item.id,
+                        type: 'delete',
+                        contentType: 'application/json'
+                    }).then(res => {
+                        this.loadTable();
+                    })
+                },
+                downloadPDF(item) {
+                    if(item.isLoad === 0){
+                        alert("请先上传pdf文件!")
+                        return
+                    }
+                    location.href = "http://localhost:8080/" + "major/" + "download/" + item.major + "/" + item.majorVersion;
+                }
+            }
+        })
+    </script>
+</body>
+</html>
